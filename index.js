@@ -428,13 +428,7 @@ if (!conversationsDB[from]) {
 
     // 🔥 MEJORA UX: Mostrar "Escribiendo..."
     await mostrarEscribiendo(from);
-    // ================= MODO HUMANO =================
-
-if (
-  conversationsDB[from].mode === "human"
-) {
-  return;
-}
+    
 
     // ===== INICIALIZAR MEMORIA =====
     if (!conversaciones[from]) {
@@ -457,6 +451,19 @@ conversationsDB[from].messages.push({
 conversationsDB[from].updated_at =
   new Date();
 
+  // ================= MODO HUMANO =================
+
+if (
+  conversationsDB[from].mode === "human"
+) {
+
+  console.log(
+    "Modo humano activo:",
+    from
+  );
+
+  return;
+}
     // ===== SALUDO MINIMALISTA Y POTENTE =====
     const txtLower = textoUsuario.toLowerCase();
     const palabrasSaludo = ["hola", "buenas", "info", "informacion", "hey", "buenos", "saludos"];
