@@ -4,13 +4,21 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const OpenAI = require('openai');
+const authRoutes = require("./routes/auth");
+const cors = require("cors");
+const conversationRoutes = require("./routes/conversations");
 
 const app = express();
+app.use(cors());
+app.use(express.json());
 app.use(bodyParser.json());
+app.use('/auth', authRoutes);
+app.use('/conversations', conversationRoutes);
 
 // 🔥 Memoria en sesión (Guarda el contexto de los clientes)
 const conversaciones = {};
-
+// ================= CRM MEMORY DATABASE =================
+const conversationsDB = {};
 // 🔥 OpenAI Setup
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -36,6 +44,118 @@ app.get('/webhook', (req, res) => {
       res.sendStatus(403);
     }
   }
+});
+
+// ================= CRM ENDPOINTS =================
+
+// OBTENER TODAS LAS CONVERSACIONES
+app.get('/conversations', (req, res) => {
+  const conversations = Object.values(conversationsDB);
+
+  res.json(conversations);
+});
+
+// OBTENER MENSAJES DE UNA CONVERSACIÓN
+app.get('/messages/:conversationId', (req, res) => {
+  const { conversationId } = req.params;
+
+  const conversation =
+    conversationsDB[conversationId];
+
+  if (!conversation) {
+    return res.status(404).json({
+      error: 'Conversación no encontrada',
+    });
+  }
+
+  res.json(conversation.messages);
+});
+
+// CAMBIAR MODO IA / HUMANO
+app.post('/conversation/mode', (req, res) => {
+  const { conversationId, mode } = req.body;
+
+  if (!conversationsDB[conversationId]) {
+    return res.status(404).json({
+      error: 'Conversación no encontrada',
+    });
+  }
+
+  conversationsDB[conversationId].mode = mode;
+
+  res.json({
+    success: true,
+    mode
+  });
+});
+
+// RESPUESTA HUMANA DESDE CRM
+app.post('/agent/reply', async (req, res) => {
+  try {
+
+    const {
+      conversationId,
+      message,
+      agentName
+    } = req.body;
+
+    const conversation =
+      conversationsDB[conversationId];
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: "Conversación no encontrada"
+      });
+    }
+
+    // Guardar mensaje operador
+    conversation.messages.push({
+      id: Date.now().toString(),
+      sender_type: "agent",
+      content: message,
+      timestamp: new Date(),
+      agent: agentName
+    });
+
+    conversation.updated_at = new Date();
+
+    // Enviar WhatsApp
+    await enviarMensaje(
+      conversationId,
+      message
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error enviando mensaje"
+    });
+  }
+});
+
+// CERRAR CONVERSACIÓN
+app.post('/conversation/close', (req, res) => {
+
+  const { conversationId } = req.body;
+
+  if (!conversationsDB[conversationId]) {
+    return res.status(404).json({
+      error: 'Conversación no encontrada',
+    });
+  }
+
+  conversationsDB[conversationId].status =
+    "closed";
+
+  res.json({
+    success: true
+  });
 });
 
 // ================= FUNCIONES DE EXPERIENCIA (UX) =================
@@ -219,20 +339,65 @@ app.post('/webhook', async (req, res) => {
     }
 
     const textoUsuario = message.text.body;
+    await axios.post(
+  "http://localhost:3000/conversations/upsert",
+  {
+    phone: from,
+    name: from,
+    message: textoUsuario,
+    fromMe: false,
+  }
+);
+    
+    // ================= GUARDAR MENSAJE USUARIO =================
+
+conversationsDB[from].messages.push({
+  id: Date.now().toString(),
+  sender_type: "user",
+  content: textoUsuario,
+  timestamp: new Date()
+});
+
+conversationsDB[from].updated_at =
+  new Date();
 
     // 🔥 MEJORA UX: Marcar como leído (doble palomita azul)
     await marcarComoLeido(message.id);
 
     // 🔥 MEJORA UX: Mostrar "Escribiendo..."
     await mostrarEscribiendo(from);
+    // ================= MODO HUMANO =================
+
+if (
+  conversationsDB[from].mode === "human"
+) {
+  return;
+}
 
     // ===== INICIALIZAR MEMORIA =====
     if (!conversaciones[from]) {
-      conversaciones[from] = {
-        saludoEnviado: false,
-        historial: []
-      };
-    }
+  conversaciones[from] = {
+    saludoEnviado: false,
+    historial: []
+  };
+}
+
+// ================= CREAR CONVERSACIÓN CRM =================
+
+if (!conversationsDB[from]) {
+
+  conversationsDB[from] = {
+    id: from,
+    phone: from,
+    name: from,
+    mode: "ai",
+    status: "open",
+    assigned_agent: null,
+    created_at: new Date(),
+    updated_at: new Date(),
+    messages: []
+  };
+}
 
     // ===== SALUDO MINIMALISTA Y POTENTE =====
     const txtLower = textoUsuario.toLowerCase();
@@ -268,7 +433,28 @@ app.post('/webhook', async (req, res) => {
       content: respuesta
     });
 
+    // ================= GUARDAR RESPUESTA IA =================
+
+conversationsDB[from].messages.push({
+  id: Date.now().toString(),
+  sender_type: "ai",
+  content: respuesta,
+  timestamp: new Date()
+});
+
+conversationsDB[from].updated_at =
+  new Date();
+
     await enviarMensaje(from, respuesta);
+    await axios.post(
+  "http://localhost:3000/conversations/upsert",
+  {
+    phone: from,
+    name: from,
+    message: respuesta,
+    fromMe: true,
+  }
+);
 
   } catch (error) {
     console.error("ERROR GRAVE:", error);
