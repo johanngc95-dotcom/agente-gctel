@@ -6,14 +6,14 @@ const axios = require('axios');
 const OpenAI = require('openai');
 const authRoutes = require("./routes/auth");
 const cors = require("cors");
-const conversationRoutes = require("./routes/conversations");
+
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 app.use('/auth', authRoutes);
-app.use('/conversations', conversationRoutes);
+
 
 // 🔥 Memoria en sesión (Guarda el contexto de los clientes)
 const conversaciones = {};
@@ -208,6 +208,72 @@ async function mostrarEscribiendo(to) {
 }
 
 // ================= IA Y PROMPT =================
+function guardarConversacion(phone, name, message, fromMe = false) {
+
+  if (!global.crmConversations) {
+    global.crmConversations = [];
+  }
+
+  let existing = global.crmConversations.find(
+    (c) => c.phone === phone
+  );
+
+  const newMessage = {
+    id: Date.now().toString(),
+    content: message,
+    timestamp: new Date().toISOString(),
+    sender: fromMe ? "agent" : "customer",
+  };
+
+  if (existing) {
+
+    existing.messages.push(newMessage);
+
+    existing.lastMessage = newMessage;
+
+    existing.updatedAt =
+      new Date().toISOString();
+
+    existing.lastActivity =
+      new Date().toISOString();
+
+    if (!fromMe) {
+      existing.unreadCount += 1;
+    }
+
+    return;
+  }
+
+  global.crmConversations.unshift({
+    id: Date.now().toString(),
+
+    phone,
+
+    customer: {
+      name: name || phone,
+      phone,
+      avatar: "",
+    },
+
+    messages: [newMessage],
+
+    lastMessage: newMessage,
+
+    unreadCount: fromMe ? 0 : 1,
+
+    status: "open",
+
+    mode: "ai",
+
+    priority: "medium",
+
+    createdAt: new Date().toISOString(),
+
+    updatedAt: new Date().toISOString(),
+
+    lastActivity: new Date().toISOString(),
+  });
+}
 async function respuestaIA(from, historial) {
   const tools = [
     {
@@ -339,28 +405,24 @@ app.post('/webhook', async (req, res) => {
     }
 
     const textoUsuario = message.text.body;
-    await axios.post(
-  "https://agente-gctel-1.onrender.com/conversations/upsert",
-  {
+    // ================= CREAR CONVERSACIÓN CRM =================
+
+if (!conversationsDB[from]) {
+
+  conversationsDB[from] = {
+    id: from,
     phone: from,
     name: from,
-    message: textoUsuario,
-    fromMe: false,
-  }
-);
+    mode: "ai",
+    status: "open",
+    assigned_agent: null,
+    created_at: new Date(),
+    updated_at: new Date(),
+    messages: []
+  };
+}
     
-    // ================= GUARDAR MENSAJE USUARIO =================
-
-conversationsDB[from].messages.push({
-  id: Date.now().toString(),
-  sender_type: "user",
-  content: textoUsuario,
-  timestamp: new Date()
-});
-
-conversationsDB[from].updated_at =
-  new Date();
-
+ 
     // 🔥 MEJORA UX: Marcar como leído (doble palomita azul)
     await marcarComoLeido(message.id);
 
@@ -382,22 +444,18 @@ if (
   };
 }
 
-// ================= CREAR CONVERSACIÓN CRM =================
 
-if (!conversationsDB[from]) {
+// ================= GUARDAR MENSAJE USUARIO =================
 
-  conversationsDB[from] = {
-    id: from,
-    phone: from,
-    name: from,
-    mode: "ai",
-    status: "open",
-    assigned_agent: null,
-    created_at: new Date(),
-    updated_at: new Date(),
-    messages: []
-  };
-}
+conversationsDB[from].messages.push({
+  id: Date.now().toString(),
+  sender_type: "user",
+  content: textoUsuario,
+  timestamp: new Date()
+});
+
+conversationsDB[from].updated_at =
+  new Date();
 
     // ===== SALUDO MINIMALISTA Y POTENTE =====
     const txtLower = textoUsuario.toLowerCase();
@@ -446,16 +504,6 @@ conversationsDB[from].updated_at =
   new Date();
 
     await enviarMensaje(from, respuesta);
-    await axios.post(
-  "https://agente-gctel-1.onrender.com/conversations/upsert",
-  {
-    phone: from,
-    name: from,
-    message: respuesta,
-    fromMe: true,
-  }
-);
-
   } catch (error) {
     console.error("ERROR GRAVE:", error);
     // Si OpenAI falla o hay un error raro, Gisy no se queda callado.
@@ -464,6 +512,96 @@ conversationsDB[from].updated_at =
       await enviarMensaje(fallbackTo, "Dame un segundo, estoy consultando con los ingenieros la mejor opción para ti... ⏳");
     }
   }
+});
+
+// ================= CRM CONVERSATIONS API =================
+
+app.get('/conversations', (req, res) => {
+
+  const conversaciones = Object.values(
+    conversationsDB
+  ).map((conv) => {
+
+    const mensajes = conv.messages || [];
+
+    const ultimo =
+      mensajes[mensajes.length - 1];
+
+    return {
+
+      id: conv.id,
+
+      customer: {
+        name: conv.phone,
+        phone: conv.phone,
+        avatar: '',
+      },
+
+      messages: mensajes.map((msg) => ({
+        id: msg.id,
+
+        content: msg.content,
+
+        sender:
+          msg.sender_type === 'user'
+            ? 'customer'
+            : 'agent',
+
+        timestamp: new Date(
+          msg.timestamp
+        ).toISOString(),
+
+        type: 'text',
+
+        status: 'delivered',
+      })),
+
+      lastMessage: ultimo
+        ? {
+            id: ultimo.id,
+            content: ultimo.content,
+
+            sender:
+              ultimo.sender_type === 'user'
+                ? 'customer'
+                : 'agent',
+
+            timestamp: new Date(
+              ultimo.timestamp
+            ).toISOString(),
+
+            type: 'text',
+
+            status: 'delivered',
+          }
+        : null,
+
+      unreadCount: 0,
+
+      mode: conv.mode || 'ai',
+
+      status: conv.status || 'open',
+
+      priority: 'medium',
+
+      tags: ['whatsapp'],
+
+      createdAt: new Date(
+        conv.created_at
+      ).toISOString(),
+
+      updatedAt: new Date(
+        conv.updated_at
+      ).toISOString(),
+
+      lastActivity: new Date(
+        conv.updated_at
+      ).toISOString(),
+    };
+  });
+
+  res.json(conversaciones);
+
 });
 
 // ================= SERVER =================
