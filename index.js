@@ -545,33 +545,45 @@ app.get('/conversations', (req, res) => {
       },
 
       messages: mensajes.map((msg) => ({
-        id: msg.id,
+  id: msg.id,
 
-        content: msg.content,
+  content: msg.content,
 
-        sender:
-          msg.sender_type === 'user'
-            ? 'customer'
-            : 'agent',
+  sender_type: msg.sender_type,
 
-        timestamp: new Date(
-          msg.timestamp
-        ).toISOString(),
+  sender:
+    msg.sender_type === 'user'
+      ? 'customer'
+      : msg.sender_type === 'ai'
+      ? 'ai'
+      : msg.sender_type === 'agent'
+      ? 'human'
+      : 'system',
 
-        type: 'text',
+  timestamp: new Date(
+    msg.timestamp
+  ).toISOString(),
 
-        status: 'delivered',
-      })),
+  type: 'text',
 
-      lastMessage: ultimo
-        ? {
-            id: ultimo.id,
-            content: ultimo.content,
+  status: 'delivered',
+})),
 
-            sender:
-              ultimo.sender_type === 'user'
-                ? 'customer'
-                : 'agent',
+     lastMessage: ultimo
+  ? {
+      id: ultimo.id,
+      content: ultimo.content,
+
+      sender_type: ultimo.sender_type,
+
+      sender:
+        ultimo.sender_type === 'user'
+          ? 'customer'
+          : ultimo.sender_type === 'ai'
+          ? 'ai'
+          : ultimo.sender_type === 'agent'
+          ? 'human'
+          : 'system',
 
             timestamp: new Date(
               ultimo.timestamp
