@@ -4,108 +4,30 @@ const jwt = require("jsonwebtoken");
 
 const router = express.Router();
 
-/*
-USUARIO FIJO TEMPORAL
-*/
-const users = [
-  {
-    id: "1",
-    name: "Johan",
-    email: "jgonzalezc@gctel.mx",
-
-    // contraseña: 123456
-    password:
-      "123456",
-
-    role: "admin",
-  },
-];
-
-// ================= REGISTER =================
-
-router.post("/register", async (req, res) => {
-  try {
-
-    const {
-      name,
-      email,
-      password
-    } = req.body;
-
-    const existingUser =
-      users.find(
-        (u) => u.email === email
-      );
-
-    if (existingUser) {
-
-      return res.status(400).json({
-        error: "El usuario ya existe",
-      });
-    }
-
-    const hashedPassword =
-      await bcrypt.hash(
-        password,
-        10
-      );
-
-    const user = {
-      id: Date.now().toString(),
-      name,
-      email,
-      password: hashedPassword,
-      role: "admin",
-    };
-
-    users.push(user);
-
-    res.json({
-      success: true,
-
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      },
-    });
-
-  } catch (error) {
-
-    console.error(error);
-
-    res.status(500).json({
-      error:
-        "Error interno del servidor",
-    });
-  }
-});
-
 // ================= LOGIN =================
 
 router.post("/login", async (req, res) => {
-
   try {
 
-    const {
-      email,
-      password
-    } = req.body;
+    const { email, password } = req.body;
 
-    const user =
-      users.find(
-        (u) => u.email === email
-      );
+    // USUARIO FIJO
+    const user = {
+      id: "1",
+      name: "Johan",
+      email: "jgonzalezc@gctel.mx",
+      password: await bcrypt.hash("123456", 10),
+      role: "admin",
+    };
 
-    if (!user) {
-
+    // VALIDAR EMAIL
+    if (email !== user.email) {
       return res.status(401).json({
-        error:
-          "Usuario no encontrado",
+        error: "Usuario no encontrado",
       });
     }
 
+    // VALIDAR PASSWORD
     const validPassword =
       await bcrypt.compare(
         password,
@@ -113,40 +35,35 @@ router.post("/login", async (req, res) => {
       );
 
     if (!validPassword) {
-
       return res.status(401).json({
-        error:
-          "Contraseña incorrecta",
+        error: "Contraseña incorrecta",
       });
     }
 
-    const accessToken =
-      jwt.sign(
-        {
-          id: user.id,
-          role: user.role,
-        },
-        "GCTEL_SECRET",
-        {
-          expiresIn: "7d",
-        }
-      );
+    // TOKENS
+    const accessToken = jwt.sign(
+      {
+        id: user.id,
+        role: user.role,
+      },
+      "GCTEL_SECRET",
+      {
+        expiresIn: "7d",
+      }
+    );
 
-    const refreshToken =
-      jwt.sign(
-        {
-          id: user.id,
-        },
-        "GCTEL_REFRESH_SECRET",
-        {
-          expiresIn: "30d",
-        }
-      );
+    const refreshToken = jwt.sign(
+      {
+        id: user.id,
+      },
+      "GCTEL_REFRESH_SECRET",
+      {
+        expiresIn: "30d",
+      }
+    );
 
     res.json({
-
       accessToken,
-
       refreshToken,
 
       user: {
@@ -162,8 +79,7 @@ router.post("/login", async (req, res) => {
     console.error(error);
 
     res.status(500).json({
-      error:
-        "Error interno del servidor",
+      error: "Error interno del servidor",
     });
   }
 });
