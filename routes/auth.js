@@ -5,29 +5,50 @@ const jwt = require("jsonwebtoken");
 const router = express.Router();
 
 /*
-USUARIOS TEMPORALES EN MEMORIA
-Luego los conectaremos a base de datos
+USUARIO FIJO TEMPORAL
 */
-const users = [];
+const users = [
+  {
+    id: "1",
+    name: "Johan",
+    email: "jgonzalezc@gctel.mx",
+
+    // contraseña: 123456
+    password:
+      "123456",
+
+    role: "admin",
+  },
+];
+
+// ================= REGISTER =================
 
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
 
-    const existingUser = users.find(
-      (u) => u.email === email
-    );
+    const {
+      name,
+      email,
+      password
+    } = req.body;
+
+    const existingUser =
+      users.find(
+        (u) => u.email === email
+      );
 
     if (existingUser) {
+
       return res.status(400).json({
         error: "El usuario ya existe",
       });
     }
 
-    const hashedPassword = await bcrypt.hash(
-      password,
-      10
-    );
+    const hashedPassword =
+      await bcrypt.hash(
+        password,
+        10
+      );
 
     const user = {
       id: Date.now().toString(),
@@ -41,6 +62,7 @@ router.post("/register", async (req, res) => {
 
     res.json({
       success: true,
+
       user: {
         id: user.id,
         name: user.name,
@@ -50,63 +72,83 @@ router.post("/register", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(error);
 
     res.status(500).json({
-      error: "Error interno del servidor",
+      error:
+        "Error interno del servidor",
     });
   }
 });
 
-router.post("/login", async (req, res) => {
-  try {
-    const { email, password } = req.body;
+// ================= LOGIN =================
 
-    const user = users.find(
-      (u) => u.email === email
-    );
+router.post("/login", async (req, res) => {
+
+  try {
+
+    const {
+      email,
+      password
+    } = req.body;
+
+    const user =
+      users.find(
+        (u) => u.email === email
+      );
 
     if (!user) {
+
       return res.status(401).json({
-        error: "Usuario no encontrado",
+        error:
+          "Usuario no encontrado",
       });
     }
 
-    const validPassword = await bcrypt.compare(
-      password,
-      user.password
-    );
+    const validPassword =
+      await bcrypt.compare(
+        password,
+        user.password
+      );
 
     if (!validPassword) {
+
       return res.status(401).json({
-        error: "Contraseña incorrecta",
+        error:
+          "Contraseña incorrecta",
       });
     }
 
-    const accessToken = jwt.sign(
-      {
-        id: user.id,
-        role: user.role,
-      },
-      "GCTEL_SECRET",
-      {
-        expiresIn: "7d",
-      }
-    );
+    const accessToken =
+      jwt.sign(
+        {
+          id: user.id,
+          role: user.role,
+        },
+        "GCTEL_SECRET",
+        {
+          expiresIn: "7d",
+        }
+      );
 
-    const refreshToken = jwt.sign(
-      {
-        id: user.id,
-      },
-      "GCTEL_REFRESH_SECRET",
-      {
-        expiresIn: "30d",
-      }
-    );
+    const refreshToken =
+      jwt.sign(
+        {
+          id: user.id,
+        },
+        "GCTEL_REFRESH_SECRET",
+        {
+          expiresIn: "30d",
+        }
+      );
 
     res.json({
+
       accessToken,
+
       refreshToken,
+
       user: {
         id: user.id,
         name: user.name,
@@ -116,10 +158,12 @@ router.post("/login", async (req, res) => {
     });
 
   } catch (error) {
+
     console.error(error);
 
     res.status(500).json({
-      error: "Error interno del servidor",
+      error:
+        "Error interno del servidor",
     });
   }
 });
