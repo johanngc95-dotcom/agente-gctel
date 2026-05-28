@@ -810,9 +810,8 @@ if (
 
 if (
   textoLower.includes("llamame") ||
-  textoLower.includes("marcame") ||
   textoLower.includes("quiero contratar") ||
-  textoLower.includes("agendar") ||
+  textoLower.includes("humano") ||
   textoLower.includes("ingeniero")
 ) {
 
