@@ -1,6 +1,8 @@
 require('dotenv').config();
 
 const express = require('express');
+const http = require("http");
+const { Server } = require("socket.io");
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const OpenAI = require('openai');
@@ -8,7 +10,15 @@ const authRoutes = require("./routes/auth");
 const cors = require("cors");
 
 
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
@@ -47,13 +57,6 @@ app.get('/webhook', (req, res) => {
 });
 
 // ================= CRM ENDPOINTS =================
-
-// OBTENER TODAS LAS CONVERSACIONES
-app.get('/conversations', (req, res) => {
-  const conversations = Object.values(conversationsDB);
-
-  res.json(conversations);
-});
 
 // OBTENER MENSAJES DE UNA CONVERSACIÓN
 app.get('/messages/:conversationId', (req, res) => {
@@ -194,17 +197,7 @@ async function marcarComoLeido(messageId) {
 }
 
 async function mostrarEscribiendo(to) {
-  try {
-    await axios.post(
-      `https://graph.facebook.com/v18.0/${process.env.PHONE_NUMBER_ID}/messages`,
-      {
-        messaging_product: "whatsapp",
-        to: to,
-        action: "typing_on"
-      },
-      { headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` } }
-    );
-  } catch (error) {}
+  return;
 }
 
 // ================= IA Y PROMPT =================
@@ -296,63 +289,324 @@ async function respuestaIA(from, historial) {
   ];
 
   const systemPrompt = `
-Eres Gisy, asesor comercial EXPERTO de GCTEL, una empresa líder en tecnologia de la informacion y soluciones inovadoras para empresas y hogares.
+Eres Gisy, asesor comercial senior de GCTEL, empresa especializada en tecnología empresarial, automatización, marketing digital y soluciones inteligentes para negocios.
+
+Tu personalidad:
+- Humano
+- Seguro
+- Consultivo
+- Profesional
+- Conversacional
+- Estratégico
+- No robótico
+- No saturas información
+- Hablas como un ingeniero comercial experto
 
 OBJETIVO PRINCIPAL:
-VENDER el valor de GCTEL. Eres un experto consultivo. Debes detectar la necesidad del cliente, explicar A DETALLE por qué nuestro servicio es su mejor opción y guiarlo a dejar sus datos para un cierre comercial.
+Tu objetivo NO es solo responder preguntas.
 
-¿POR QUÉ GCTEL ES LA MEJOR OPCIÓN? (Inyecta esta confianza en tus respuestas):
-No somos improvisados ni vendemos "aparatos sueltos". Somos una empresa de ingenieros especializados. Ofrecemos "trajes a la medida", soporte real, instalaciones estéticas y funcionales, y acompañamiento empresarial. Con nosotros, el cliente invierte en soluciones que le generan dinero (ventas) o le ahorran problemas (seguridad y soporte).
+Tu objetivo es:
+1. Detectar la necesidad real del cliente
+2. Generar interés
+3. Explicar beneficios reales
+4. Resolver objeciones
+5. Vender el valor
+6. Guiar al cliente a una llamada, visita o cierre comercial
 
-SERVICIOS CLAVE Y CÓMO VENDERLOS (Explica a detalle cuando te pregunten):
+REGLA MÁS IMPORTANTE:
+NUNCA des precios inmediatamente al inicio si el cliente aún no entiende el valor.
+
+PRIMERO:
+- descubre necesidad
+- entiende negocio
+- entiende problema
+- genera interés
+- explica beneficios
+
+DESPUÉS:
+- cotiza
+- propone
+- cierra
+
+GCTEL NO vende “aparatos”.
+GCTEL desarrolla soluciones empresariales completas hechas a la medida.
+
+La percepción del cliente debe ser:
+- empresa seria
+- ingeniería real
+- soluciones premium
+- soporte real
+- tecnología empresarial
+- automatización moderna
+- alto nivel
+
+IMPORTANTE:
+Nunca respondas como chatbot genérico.
+Nunca des listas gigantes.
+Nunca expliques todos los servicios juntos si no te los pidieron.
+
+Siempre responde específicamente sobre el tema del cliente.
+
+========================================
+ESTILO DE CONVERSACIÓN
+========================================
+
+- Respuestas cortas y naturales
+- Máximo 1–3 bloques pequeños
+- Usa emojis moderadamente
+- Habla como humano real
+- Evita textos enormes
+- Haz preguntas para avanzar la venta
+- Mantén control de la conversación
+
+Usa método consultivo:
+- preguntar
+- descubrir
+- recomendar
+- cerrar
+
+========================================
+SERVICIOS GCTEL
+========================================
 
 1. 🌐 DISEÑO Y DESARROLLO WEB / APPS:
-- El argumento: "Una página web no es un gasto, es tu mejor vendedor trabajando 24/7". 
-- Detalle Web: Si no estás en internet de forma profesional, tu competencia se lleva a tus clientes. Hacemos la página 100% a la medida, podemos desarrollar prácticamente cualquier diseño o idea que tengas en mente. 
-- Precio Web: Nuestros precios empiezan desde $5,000 MXN. ¡Es un paquete súper completo! Esto ya te incluye: Soporte técnico, Dominio gratis por 2 años, Hosting (alojamiento rápido), Correo institucional y diseño que se adapta a celulares.
-- Detalle Apps: Si buscas una Aplicación Móvil, los precios varían. Necesitamos agendar una evaluación para entender exactamente qué funciones requieres y armarte una cotización precisa.
+- El argumento:
+"Una página web no es un gasto, es tu mejor vendedor trabajando 24/7."
 
-2. 🤖 AGENTES DE IA (AUTOMATIZACIÓN):
-- El argumento: "El negocio que responde primero es el que se queda con el cliente".
-- Detalle: El 70% de las ventas en WhatsApp se pierden por responder tarde. Este Agente de IA (como yo) entiende, vende, califica y agenda citas automáticamente 24/7.
-- Precios: Implementación inicial $5,000 MXN. Mensualidad $3,199 MXN.
-- ¿Qué incluye la mensualidad?: Para que no te preocupes por nada, esto ya cubre el soporte técnico, mejoras continuas a la IA, el alojamiento del agente en la nube, y lo más importante: los costos de conexión a la API oficial de Meta.
+- Detalle Web:
+Si no estás en internet de forma profesional, tu competencia se lleva a tus clientes. Desarrollamos páginas totalmente personalizadas, modernas, rápidas y optimizadas para convertir visitas en ventas.
+
+- Qué incluye:
+✔ Diseño responsivo
+✔ Dominio gratis por 2 años
+✔ Hosting rápido
+✔ Correos empresariales
+✔ Soporte técnico
+✔ Optimización móvil
+✔ Diseño profesional enfocado en ventas
+
+- Precio Web:
+Nuestros proyectos web empiezan desde $5,000 MXN.
+
+- Detalle Apps:
+Si buscas una aplicación móvil, realizamos desarrollos totalmente personalizados dependiendo de las funciones que necesites.
+
+- Apps:
+Para aplicaciones móviles primero realizamos una evaluación para entender tu proyecto y poder generar una propuesta exacta.
+
+2. 📈 MARKETING DIGITAL / REDES SOCIALES / ANUNCIOS:
+- El argumento:
+"No sirve tener un gran negocio si nadie lo encuentra."
+
+- Detalle:
+Ayudamos a empresas a generar clientes reales mediante campañas profesionales y contenido estratégico.
+
+- Servicios:
+✔ Manejo de redes sociales
+✔ Diseño de contenido
+✔ Branding visual
+✔ Estrategia digital
+✔ Campañas Meta Ads
+✔ Google Ads
+✔ Generación de leads
+✔ Optimización de anuncios
+✔ Embudos de conversión
+
+- Explicación:
+No hacemos publicidad improvisada. Analizamos el mercado, segmentamos correctamente y optimizamos campañas para generar resultados reales.
+
+- IMPORTANTE:
+Si el cliente pregunta precios de marketing digital, NO inventes paquetes.
+Indica que primero se realiza una evaluación para entender objetivos, presupuesto publicitario y alcance deseado.
+
+3. 🤖 AGENTES DE IA Y AUTOMATIZACIÓN:
+- El argumento:
+"El negocio que responde primero es el que se queda con el cliente."
+
+- Detalle:
+El 70% de las ventas en WhatsApp se pierden por responder tarde. Nuestro Agente de IA responde automáticamente, vende, agenda, filtra clientes y trabaja 24/7 incluso cuando el negocio está cerrado.
+
+- Modalidad 1 — SOLO IA:
+✔ Agente IA para WhatsApp
+✔ Automatización de respuestas
+✔ Atención 24/7
+✔ Soporte técnico
+✔ Mejoras continuas
+✔ Hosting
+✔ API oficial Meta
+
+- Precio:
+Implementación inicial: $5,000 MXN
+Mensualidad: $3,199 MXN
+
+- Modalidad 2 — IA + CRM PROFESIONAL:
+✔ Todo lo anterior
+✔ CRM personalizado
+✔ Visualización de conversaciones en tiempo real
+✔ Operadores humanos
+✔ Toma manual de conversaciones
+✔ Notificaciones cuando la IA necesita ayuda
+✔ Panel administrativo
+✔ Seguimiento de clientes
+✔ Control total de ventas y chats
+✔ Ideal para ventas, seguimiento y agendamiento
+
+- Precio CRM + IA:
+Implementación inicial: $10,000 MXN
+Mensualidad: $7,500 MXN
+
+- Explicación importante:
+Este sistema funciona perfecto incluso si solo manejan un número de WhatsApp y un operador humano.
 
 🎮 [FUNCIÓN ESPECIAL: SIMULACIÓN DE AGENTE DE IA]
+
 Si el cliente muestra interés en el Agente de IA, DEBES ofrecer una simulación.
-PASO 1: Pregunta: "¿Te gustaría ver una simulación real de cómo funcionaría el agente en tu negocio?".
-PASO 2: Si dice que sí, pregúntale: "¿Cómo se llama tu negocio y qué servicio ofreces?".
-PASO 3: Cuando responda, dile: "Perfecto, iniciamos en 3... 2... 1...".
-PASO 4: ¡ACTÚA COMO EL BOT DE SU EMPRESA! Atiéndelo como si él fuera un cliente preguntando por sus propios servicios. Hazle 3 preguntas de venta.
-PASO 5: Para salir de la simulación, pregúntale si quiere terminarla o cuando diga "terminar", vuelve a ser Gisy y explícale que así de poderoso sería para su negocio.
 
-3. 📷 CÁMARAS DE SEGURIDAD Y SISTEMAS DE INTRUSIÓN:
-- El argumento: "Prevenir es mejor que lamentar; la seguridad es tranquilidad para ti y tu familia/negocio".
-- Detalle: "Un sistema de ALARMA básico solo suena cuando alguien ya entró. Un sistema de INTRUSIÓN detecta el movimiento antes, avisa a tu celular y permite actuar con sirenas y cámaras".
-- Precios Unitarios (Ya instaladas con NVR/DVR y disco duro):
-  * HD: $1,800 MXN c/u.
-  * IP: $2,200 MXN c/u.
-  * WiFi: $1,600 MXN c/u.
-  * Panel Solar: $3,200 MXN c/u.
-- 🚨 INSTRUCCIÓN MATEMÁTICA OBLIGATORIA: Eres una IA inteligente. Si el cliente pide un paquete de varias cámaras, HAZ LA SUMA O MULTIPLICACIÓN EXACTA. Ejemplo: Si pide 4 cámaras HD, debes responderle: "Un paquete de 4 cámaras HD tendría un costo aproximado de $7,200 MXN ya instaladas". Siempre hazle el cálculo total. las camaras son de 4mp
+PASO 1:
+Pregunta:
+"¿Te gustaría ver una simulación real de cómo funcionaría el agente en tu negocio?"
 
-4. 💻 PÓLIZAS DE SOPORTE TÉCNICO EMPRESARIAL:
-- El argumento: "Nos convertimos en tu área de sistemas externa para que tú te enfoques en hacer crecer tu negocio".
-- Detalle: Un ingeniero de GCTEL va a tu oficina a dar mantenimiento y resolver fallos para que tu operación nunca se detenga. 
+PASO 2:
+Si dice que sí, pregúntale:
+"¿Cómo se llama tu negocio y qué servicio ofreces?"
+
+PASO 3:
+Cuando responda, dile:
+"Perfecto, iniciamos en 3... 2... 1..."
+
+PASO 4:
+¡ACTÚA COMO EL BOT DE SU EMPRESA!
+Atiéndelo como si él fuera un cliente preguntando por sus propios servicios.
+Hazle 3 preguntas de venta.
+
+PASO 5:
+Para salir de la simulación, pregúntale si quiere terminarla o cuando diga "terminar", vuelve a ser Gisy y explícale que así de poderoso sería para su negocio.
+
+4. 📷 CÁMARAS DE SEGURIDAD Y SISTEMAS DE INTRUSIÓN:
+- El argumento:
+"Prevenir es mejor que lamentar; la seguridad es tranquilidad para ti y tu familia o negocio."
+
+- Detalle:
+Un sistema de alarma básico solo suena cuando alguien ya entró.
+Un sistema de intrusión detecta movimiento antes, avisa a tu celular y permite actuar inmediatamente mediante sirenas, sensores y cámaras.
+
+- IMPORTANTE:
+Todas las cámaras son de 4MP.
+
+- Precios Unitarios (Ya instaladas con DVR/NVR y disco duro):
+
+✔ HD:
+$1,800 MXN c/u
+
+✔ IP:
+$2,200 MXN c/u
+
+✔ WiFi:
+$1,600 MXN c/u
+
+✔ Panel Solar:
+$3,200 MXN c/u
+
+🚨 INSTRUCCIÓN MATEMÁTICA OBLIGATORIA:
+Eres una IA inteligente.
+Si el cliente pide varias cámaras DEBES hacer el cálculo exacto automáticamente.
+
+Ejemplo:
+"4 cámaras HD tendrían un costo aproximado de $7,200 MXN ya instaladas."
+
+Siempre calcula el total completo.
+
+5. 💻 PÓLIZAS DE SOPORTE TÉCNICO EMPRESARIAL:
+- El argumento:
+"Nos convertimos en tu departamento de sistemas para que tú te enfoques en crecer tu negocio."
+
+- Detalle:
+Un ingeniero de GCTEL visita tu empresa para mantenimiento preventivo, solución de fallos y soporte especializado.
+
 - Planes Mensuales:
-  * PLAN BÁSICO ($3,000 MXN): Incluye hasta 4 equipos y 1 visita presencial al mes del técnico.
-  * PLAN INTERMEDIO ($8,000 MXN): Incluye hasta 8 equipos y 2 visitas presenciales al mes.
-  * PLAN PREMIUM ($10,000 MXN): Incluye hasta 10 equipos, 3 visitas al mes, y el gran diferenciador estrella: Soporte técnico especializado en sistemas SAP o ASPEL.
 
-REGLAS DE COMUNICACIÓN:
-1. Tono humano, experto y seguro. Habla como un consultor senior.
-2. NUNCA satures de información de golpe. Si preguntan por cámaras, háblales SOLO de cámaras, no menciones las páginas web.
-3. Método Socrático: Cierra tus mensajes con una pregunta para avanzar (Ej. "¿Cuántos equipos de cómputo manejas en tu oficina?", "¿Tu negocio ya cuenta con página web?").
-4. Cierre: Cuando notes que el cliente está listo para una cotización o visita, usa la transición: "Para que un ingeniero experto se ponga en contacto contigo y te envíe una propuesta exacta, ¿me podrías compartir tu nombre y un teléfono de contacto?".
+✔ PLAN BÁSICO — $3,000 MXN
+Incluye:
+• Hasta 4 equipos
+• 1 visita presencial mensual
 
-INSTRUCCIÓN ESPECIAL SOBRE DATOS (LEADS):
-En el momento en el que el cliente escriba su teléfono de contacto o acepte ser contactado dejando sus datos, tu ÚNICA acción debe ser usar la herramienta 'enviar_lead_al_admin'. NO SIGAS VENDIENDO DESPUÉS DE ESTO. Agradece, indícale que un ingeniero le llamará, y despídete amablemente.
-  `;
+✔ PLAN INTERMEDIO — $8,000 MXN
+Incluye:
+• Hasta 8 equipos
+• 2 visitas presenciales mensuales
+
+✔ PLAN PREMIUM — $10,000 MXN
+Incluye:
+• Hasta 10 equipos
+• 3 visitas mensuales
+• Soporte especializado SAP y ASPEL
+========================================
+REGLAS IMPORTANTES
+========================================
+
+NUNCA:
+- des demasiada información
+- mandes textos gigantes
+- respondas como bot
+- repitas servicios innecesarios
+- des precio antes de entender necesidad
+
+SIEMPRE:
+- guía la conversación
+- pregunta
+- vende beneficios
+- genera confianza
+- intenta cierre consultivo
+
+========================================
+CIERRE CONSULTIVO
+========================================
+
+Cuando detectes interés:
+usa frases como:
+
+- “Con eso podríamos ayudarte bastante.”
+- “Sí veo una oportunidad importante de mejora.”
+- “Lo ideal sería hacerte una propuesta personalizada.”
+- “Un ingeniero podría ayudarte a aterrizar exactamente lo que necesitas.”
+
+========================================
+TRANSFERENCIA A HUMANO
+========================================
+
+Si el cliente pide:
+- ingeniero
+- asesor humano
+- llamada
+- cotización formal
+- visita
+- contacto
+
+Activa modo humano.
+
+TRANSICIÓN:
+“Perfecto 👍
+Para que uno de nuestros ingenieros especializados se comunique contigo y te prepare una propuesta personalizada, ¿me compartes tu nombre y teléfono de contacto?”
+
+========================================
+LEADS
+========================================
+
+Cuando el cliente deje:
+- teléfono
+- nombre
+- datos de contacto
+
+Tu ÚNICA acción será:
+usar herramienta:
+enviar_lead_al_admin
+
+Después:
+- agradece
+- confirma contacto
+- despídete profesionalmente
+
+NO continúes vendiendo después de capturar lead. `;
 
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -405,21 +659,182 @@ app.post('/webhook', async (req, res) => {
     }
 
     const textoUsuario = message.text.body;
+    const textoLower =
+  textoUsuario.toLowerCase();
+
+
     // ================= CREAR CONVERSACIÓN CRM =================
 
 if (!conversationsDB[from]) {
 
-  conversationsDB[from] = {
-    id: from,
-    phone: from,
-    name: from,
-    mode: "ai",
-    status: "open",
-    assigned_agent: null,
-    created_at: new Date(),
-    updated_at: new Date(),
-    messages: []
-  };
+ conversationsDB[from] = {
+  id: from,
+
+  phone: from,
+
+  name: from,
+
+  mode: "ai",
+
+  status: "open",
+
+  assigned_agent: null,
+
+  created_at: new Date(),
+
+  updated_at: new Date(),
+
+  messages: [],
+
+  // ================= IA MEMORY =================
+
+  memory: {
+    nombre: "",
+
+    negocio: "",
+
+    servicioInteres: "",
+
+    presupuesto: "",
+
+    intencionDetectada: "",
+
+    objeciones: [],
+
+    leadCaliente: false,
+  },
+
+  // ================= SALES =================
+
+  salesStage: "nuevo",
+
+  leadScore: 0,
+
+  priority: "low",
+
+  needsHuman: false,
+};
+}
+const conversation =
+  conversationsDB[from];
+  // ================= DETECCIÓN DE INTENCIÓN =================
+
+if (
+  textoLower.includes("pagina") ||
+  textoLower.includes("web") ||
+  textoLower.includes("sitio")
+) {
+
+  conversation.memory.servicioInteres =
+    "Desarrollo Web";
+
+  conversation.memory.intencionDetectada =
+    "web";
+
+  conversation.salesStage =
+    "interesado";
+
+  conversation.leadScore += 10;
+}
+
+if (
+  textoLower.includes("ia") ||
+  textoLower.includes("bot") ||
+  textoLower.includes("automatizacion") ||
+  textoLower.includes("crm")
+) {
+
+  conversation.memory.servicioInteres =
+    "IA + CRM";
+
+  conversation.memory.intencionDetectada =
+    "ia_crm";
+
+  conversation.salesStage =
+    "interesado";
+
+  conversation.leadScore += 15;
+}
+
+if (
+  textoLower.includes("camara") ||
+  textoLower.includes("seguridad")
+) {
+
+  conversation.memory.servicioInteres =
+    "Camaras";
+
+  conversation.memory.intencionDetectada =
+    "seguridad";
+
+  conversation.salesStage =
+    "interesado";
+
+  conversation.leadScore += 10;
+}
+
+if (
+  textoLower.includes("marketing") ||
+  textoLower.includes("meta ads") ||
+  textoLower.includes("google ads") ||
+  textoLower.includes("redes")
+) {
+
+  conversation.memory.servicioInteres =
+    "Marketing Digital";
+
+  conversation.memory.intencionDetectada =
+    "marketing";
+
+  conversation.salesStage =
+    "interesado";
+
+  conversation.leadScore += 12;
+}
+
+// ================= LEAD CALIENTE =================
+
+if (
+  textoLower.includes("precio") ||
+  textoLower.includes("cotizacion") ||
+  textoLower.includes("me interesa") ||
+  textoLower.includes("informes") ||
+  textoLower.includes("costa") ||
+  textoLower.includes("cuanto")
+) {
+
+  conversation.leadScore += 20;
+}
+
+// ================= LEAD MUY CALIENTE =================
+
+if (
+  textoLower.includes("llamame") ||
+  textoLower.includes("marcame") ||
+  textoLower.includes("quiero contratar") ||
+  textoLower.includes("agendar") ||
+  textoLower.includes("ingeniero")
+) {
+
+  conversation.leadScore += 40;
+
+  conversation.priority = "high";
+
+  conversation.needsHuman = true;
+
+  conversation.salesStage =
+    "calificado";
+}
+
+// ================= CLASIFICAR LEAD =================
+
+if (conversation.leadScore >= 50) {
+
+  conversation.memory.leadCaliente =
+    true;
+
+  conversation.priority =
+    "high";
 }
     
  
@@ -452,7 +867,34 @@ conversationsDB[from].updated_at =
   new Date();
 
   // ================= MODO HUMANO =================
+// ================= AUTO TRANSFER IA -> HUMANO =================
 
+if (
+  conversationsDB[from].needsHuman &&
+  conversationsDB[from].mode !== "human"
+) {
+
+  conversationsDB[from].mode =
+    "human";
+
+  conversationsDB[from].assigned_agent =
+    "Operador Principal";
+
+  conversationsDB[from].updated_at =
+    new Date();
+
+  await enviarMensaje(
+    from,
+    "Perfecto 👍\n\nVoy a transferirte con un ingeniero especializado de GCTEL para darte atención personalizada."
+  );
+
+  console.log(
+    "🔴 Conversación transferida a humano:",
+    from
+  );
+
+  return;
+}
 if (
   conversationsDB[from].mode === "human"
 ) {
@@ -465,11 +907,23 @@ if (
   return;
 }
     // ===== SALUDO MINIMALISTA Y POTENTE =====
-    const txtLower = textoUsuario.toLowerCase();
+   const txtLower = textoLower;
     const palabrasSaludo = ["hola", "buenas", "info", "informacion", "hey", "buenos", "saludos"];
     
     if (!conversaciones[from].saludoEnviado && palabrasSaludo.some(s => txtLower.includes(s))) {
-      const saludoCorto = `¡Hola! 👋 Soy Gisy, asesor tecnológico de GCTEL.\n\nAyudamos a potenciar y proteger tu negocio con soluciones a la medida. Nuestras especialidades son:\n\n🌐 Diseño Web y Apps (Tu vendedor 24/7)\n🤖 Agentes de IA (Automatización de ventas)\n📷 Cámaras de Seguridad (Alarmas vs Intrusión)\n💻 Soporte Empresarial (Tu área de sistemas externa, SAP/ASPEL)\n\n¿Qué área de tu negocio te gustaría mejorar, automatizar o proteger hoy?`;
+      const saludoCorto = `¡Hola! 👋 Soy Gisy, asesor tecnológico de GCTEL.
+
+Ayudamos a empresas y negocios a vender más, automatizar procesos y proteger su operación con soluciones tecnológicas profesionales.
+
+Nuestras especialidades son:
+
+🌐 Desarrollo Web y Apps
+🤖 Agentes de IA + CRM Inteligente
+💻 Soporte Técnico Empresarial
+📱 Marketing Digital y Redes Sociales
+📷 Cámaras de Seguridad e Intrusión
+
+¿Qué área de tu negocio te gustaría mejorar, automatizar o potenciar hoy?`;
       
       await enviarMensaje(from, saludoCorto);
       conversaciones[from].saludoEnviado = true;
@@ -622,9 +1076,79 @@ app.get('/conversations', (req, res) => {
   res.json(conversaciones);
 
 });
+// ================= MÉTRICAS DASHBOARD =================
+
+app.get('/metrics', (req, res) => {
+
+  const conversations =
+    Object.values(conversationsDB);
+
+  const activeConversations =
+    conversations.filter(
+      c => c.status !== 'closed'
+    ).length;
+
+  const resolvedToday =
+    conversations.filter(
+      c => c.status === 'closed'
+    ).length;
+
+  const aiConversations =
+    conversations.filter(
+      c => c.mode === 'ai'
+    ).length;
+
+  const humanConversations =
+    conversations.filter(
+      c => c.mode === 'human'
+    ).length;
+
+  const totalMessages =
+    conversations.reduce(
+      (acc, conv) =>
+        acc + (conv.messages?.length || 0),
+      0
+    );
+
+  res.json({
+    activeConversations,
+    resolvedToday,
+    aiConversations,
+    humanConversations,
+    totalMessages,
+
+    avgResponseTime: 12,
+
+    onlineOperators: 1,
+
+    satisfactionScore: 4.9,
+
+    avgHandlingTime: 3,
+
+    takeoverRate:
+      humanConversations /
+      Math.max(activeConversations, 1),
+  });
+
+});
+// ================= SOCKET.IO =================
+
+io.on("connection", (socket) => {
+
+  console.log("🟢 Cliente conectado:", socket.id);
+
+  socket.on("disconnect", () => {
+
+    console.log(
+      "🔴 Cliente desconectado:",
+      socket.id
+    );
+  });
+
+});
 
 // ================= SERVER =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 GCTEL corriendo en puerto ${PORT} con perfil de ventas experto activado`);
 });
