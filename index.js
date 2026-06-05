@@ -8,7 +8,7 @@ const axios = require('axios');
 const OpenAI = require('openai');
 const authRoutes = require("./routes/auth");
 const cors = require("cors");
-
+const connectDB = require("./config/db");
 
 
 const app = express();
@@ -23,6 +23,8 @@ app.use(cors());
 app.use(express.json());
 app.use(bodyParser.json());
 app.use('/auth', authRoutes);
+
+connectDB();
 
 
 // 🔥 Memoria en sesión (Guarda el contexto de los clientes)
