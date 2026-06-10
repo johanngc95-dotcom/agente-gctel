@@ -711,58 +711,21 @@ app.post('/webhook', async (req, res) => {
 
     // ================= CREAR CONVERSACIÓN CRM =================
 
-if (!conversationsDB[from]) {
+let conversation = await Conversation.findOne({
+  phone: from
+});
 
- conversationsDB[from] = {
-  id: from,
+if (!conversation) {
 
-  phone: from,
+  conversation = await Conversation.create({
+    phone: from,
+    name: from
+  });
 
-  name: from,
-
-  mode: "ai",
-
-  status: "open",
-
-  assigned_agent: null,
-
-  created_at: new Date(),
-
-  updated_at: new Date(),
-
-  messages: [],
-
-  // ================= IA MEMORY =================
-
-  memory: {
-    nombre: "",
-
-    negocio: "",
-
-    servicioInteres: "",
-
-    presupuesto: "",
-
-    intencionDetectada: "",
-
-    objeciones: [],
-
-    leadCaliente: false,
-  },
-
-  // ================= SALES =================
-
-  salesStage: "nuevo",
-
-  leadScore: 0,
-
-  priority: "low",
-
-  needsHuman: false,
-};
+  console.log("✅ Nueva conversación creada");
 }
-const conversation =
-  conversationsDB[from];
+
+
   // ================= DETECCIÓN DE INTENCIÓN =================
 
 if (
@@ -910,6 +873,14 @@ conversationsDB[from].messages.push({
 
 conversationsDB[from].updated_at =
   new Date();
+  
+
+  conversation.messages.push({
+  sender_type: "user",
+  content: textoUsuario
+});
+
+await conversation.save();
 
   // ================= MODO HUMANO =================
 // ================= AUTO TRANSFER IA -> HUMANO =================
@@ -1008,6 +979,11 @@ conversationsDB[from].messages.push({
 
 conversationsDB[from].updated_at =
   new Date();
+
+  conversation.messages.push({
+  sender_type: "ai",
+  content: respuesta
+});
 
     await enviarMensaje(from, respuesta);
   } catch (error) {
