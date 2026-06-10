@@ -861,6 +861,15 @@ if (conversation.leadScore >= 50) {
   };
 }
 
+// MODIFICACIÓN 1: Inicializar la base temporal si no existe
+if (!conversationsDB[from]) {
+  conversationsDB[from] = {
+    mode: 'ai',
+    status: 'open',
+    needsHuman: false,
+    messages: []
+  };
+}
 
 // ================= GUARDAR MENSAJE USUARIO =================
 
@@ -984,6 +993,9 @@ conversationsDB[from].updated_at =
   sender_type: "ai",
   content: respuesta
 });
+
+// MODIFICACIÓN 2: Guardar el documento en MongoDB con el mensaje de la IA
+await conversation.save();
 
     await enviarMensaje(from, respuesta);
   } catch (error) {
