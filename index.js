@@ -1010,103 +1010,134 @@ await conversation.save();
 
 // ================= CRM CONVERSATIONS API =================
 
-app.get('/conversations', (req, res) => {
+app.get('/conversations', async (req, res) => {
 
-  const conversaciones = Object.values(
-    conversationsDB
-  ).map((conv) => {
+  try {
 
-    const mensajes = conv.messages || [];
+    const conversacionesMongo =
+      await Conversation.find()
+      .sort({ updatedAt: -1 });
 
-    const ultimo =
-      mensajes[mensajes.length - 1];
+    const conversaciones =
+      conversacionesMongo.map((conv) => {
 
-    return {
+        const mensajes =
+          conv.messages || [];
 
-      id: conv.id,
+        const ultimo =
+          mensajes[mensajes.length - 1];
 
-      customer: {
-        name: conv.phone,
-        phone: conv.phone,
-        avatar: '',
-      },
+        return {
 
-      messages: mensajes.map((msg) => ({
-  id: msg.id,
+          id: conv.phone,
 
-  content: msg.content,
+          customer: {
+            name: conv.name || conv.phone,
+            phone: conv.phone,
+            avatar: ''
+          },
 
-  sender_type: msg.sender_type,
+          messages: mensajes.map((msg) => ({
 
-  sender:
-    msg.sender_type === 'user'
-      ? 'customer'
-      : msg.sender_type === 'ai'
-      ? 'ai'
-      : msg.sender_type === 'agent'
-      ? 'human'
-      : 'system',
+            id:
+              msg._id?.toString() ||
+              Date.now().toString(),
 
-  timestamp: new Date(
-    msg.timestamp
-  ).toISOString(),
+            content: msg.content,
 
-  type: 'text',
+            sender_type:
+              msg.sender_type,
 
-  status: 'delivered',
-})),
+            sender:
+              msg.sender_type === 'user'
+                ? 'customer'
+                : msg.sender_type === 'ai'
+                ? 'ai'
+                : msg.sender_type === 'agent'
+                ? 'human'
+                : 'system',
 
-     lastMessage: ultimo
-  ? {
-      id: ultimo.id,
-      content: ultimo.content,
-
-      sender_type: ultimo.sender_type,
-
-      sender:
-        ultimo.sender_type === 'user'
-          ? 'customer'
-          : ultimo.sender_type === 'ai'
-          ? 'ai'
-          : ultimo.sender_type === 'agent'
-          ? 'human'
-          : 'system',
-
-            timestamp: new Date(
-              ultimo.timestamp
-            ).toISOString(),
+            timestamp:
+              new Date(
+                msg.timestamp
+              ).toISOString(),
 
             type: 'text',
 
-            status: 'delivered',
-          }
-        : null,
+            status: 'delivered'
 
-      unreadCount: 0,
+          })),
 
-      mode: conv.mode || 'ai',
+          lastMessage: ultimo
+            ? {
 
-      status: conv.status || 'open',
+                id:
+                  ultimo._id?.toString(),
 
-      priority: 'medium',
+                content:
+                  ultimo.content,
 
-      tags: ['whatsapp'],
+                sender_type:
+                  ultimo.sender_type,
 
-      createdAt: new Date(
-        conv.created_at
-      ).toISOString(),
+                sender:
+                  ultimo.sender_type === 'user'
+                    ? 'customer'
+                    : ultimo.sender_type === 'ai'
+                    ? 'ai'
+                    : ultimo.sender_type === 'agent'
+                    ? 'human'
+                    : 'system',
 
-      updatedAt: new Date(
-        conv.updated_at
-      ).toISOString(),
+                timestamp:
+                  new Date(
+                    ultimo.timestamp
+                  ).toISOString(),
 
-      lastActivity: new Date(
-        conv.updated_at
-      ).toISOString(),
-    };
-  });
+                type: 'text',
 
-  res.json(conversaciones);
+                status: 'delivered'
+
+              }
+            : null,
+
+          unreadCount: 0,
+
+          mode: conv.mode || 'ai',
+
+          status:
+            conv.status || 'open',
+
+          priority:
+            conv.priority || 'low',
+
+          tags: ['whatsapp'],
+
+          createdAt:
+            conv.createdAt,
+
+          updatedAt:
+            conv.updatedAt,
+
+          lastActivity:
+            conv.updatedAt
+
+        };
+
+      });
+
+    res.json(conversaciones);
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error:
+        "Error obteniendo conversaciones"
+    });
+
+  }
 
 });
 // ================= MÉTRICAS DASHBOARD =================
