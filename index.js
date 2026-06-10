@@ -9,6 +9,7 @@ const OpenAI = require('openai');
 const authRoutes = require("./routes/auth");
 const cors = require("cors");
 const connectDB = require("./config/db");
+const Conversation = require("./models/Conversation");
 
 
 const app = express();
