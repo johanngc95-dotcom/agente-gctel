@@ -163,6 +163,31 @@ app.post('/conversation/close', (req, res) => {
     success: true
   });
 });
+// ELIMINAR CONVERSACIÓN
+
+app.delete('/conversation/:id', async (req, res) => {
+
+  try {
+
+    await Conversation.findByIdAndDelete(
+      req.params.id
+    );
+
+    res.json({
+      success: true
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error eliminando conversación"
+    });
+
+  }
+
+});
 
 // ================= FUNCIONES DE EXPERIENCIA (UX) =================
 
@@ -1026,10 +1051,9 @@ app.get('/conversations', async (req, res) => {
 
         const ultimo =
           mensajes[mensajes.length - 1];
+return {
 
-        return {
-
-          id: conv.phone,
+  id: conv._id.toString(),
 
           customer: {
             name: conv.name || conv.phone,
@@ -1142,57 +1166,75 @@ app.get('/conversations', async (req, res) => {
 });
 // ================= MÉTRICAS DASHBOARD =================
 
-app.get('/metrics', (req, res) => {
+app.get('/metrics', async (req, res) => {
 
-  const conversations =
-    Object.values(conversationsDB);
+  try {
 
-  const activeConversations =
-    conversations.filter(
-      c => c.status !== 'closed'
-    ).length;
+    const conversations =
+      await Conversation.find();
 
-  const resolvedToday =
-    conversations.filter(
-      c => c.status === 'closed'
-    ).length;
+    const activeConversations =
+      conversations.filter(
+        c => c.status !== "closed"
+      ).length;
 
-  const aiConversations =
-    conversations.filter(
-      c => c.mode === 'ai'
-    ).length;
+    const resolvedToday =
+      conversations.filter(
+        c => c.status === "closed"
+      ).length;
 
-  const humanConversations =
-    conversations.filter(
-      c => c.mode === 'human'
-    ).length;
+    const aiConversations =
+      conversations.filter(
+        c => c.mode === "ai"
+      ).length;
 
-  const totalMessages =
-    conversations.reduce(
-      (acc, conv) =>
-        acc + (conv.messages?.length || 0),
-      0
-    );
+    const humanConversations =
+      conversations.filter(
+        c => c.mode === "human"
+      ).length;
 
-  res.json({
-    activeConversations,
-    resolvedToday,
-    aiConversations,
-    humanConversations,
-    totalMessages,
+    const totalMessages =
+      conversations.reduce(
+        (acc, conv) =>
+          acc + (conv.messages?.length || 0),
+        0
+      );
 
-    avgResponseTime: 12,
+    res.json({
 
-    onlineOperators: 1,
+      activeConversations,
 
-    satisfactionScore: 4.9,
+      resolvedToday,
 
-    avgHandlingTime: 3,
+      aiConversations,
 
-    takeoverRate:
-      humanConversations /
-      Math.max(activeConversations, 1),
-  });
+      humanConversations,
+
+      totalMessages,
+
+      avgResponseTime: 12,
+
+      onlineOperators: 1,
+
+      satisfactionScore: 4.9,
+
+      avgHandlingTime: 3,
+
+      takeoverRate:
+        humanConversations /
+        Math.max(activeConversations, 1)
+
+    });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error obteniendo métricas"
+    });
+
+  }
 
 });
 // ================= SOCKET.IO =================
