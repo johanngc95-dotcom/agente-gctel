@@ -6,6 +6,8 @@ const { Server } = require("socket.io");
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const OpenAI = require('openai');
+// 🔥 FIX A: Inicialización de OpenAI agregada
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const authRoutes = require("./routes/auth");
 const cors = require("cors");
 const connectDB = require("./config/db");
@@ -30,12 +32,7 @@ connectDB();
 
 // 🔥 Memoria en sesión (Guarda el contexto de los clientes)
 const conversaciones = {};
-// ================= CRM MEMORY DATABASE =================
-const conversationsDB = {};
-// 🔥 OpenAI Setup
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+
 
 // ================= RUTA PRINCIPAL =================
 app.get('/', (req, res) => {
@@ -62,41 +59,83 @@ app.get('/webhook', (req, res) => {
 // ================= CRM ENDPOINTS =================
 
 // OBTENER MENSAJES DE UNA CONVERSACIÓN
-app.get('/messages/:conversationId', (req, res) => {
-  const { conversationId } = req.params;
+app.get('/messages/:conversationId', async (req, res) => {
 
-  const conversation =
-    conversationsDB[conversationId];
+  try {
 
-  if (!conversation) {
-    return res.status(404).json({
-      error: 'Conversación no encontrada',
+    const { conversationId } = req.params;
+
+    const conversation =
+      await Conversation.findOne({
+        phone: conversationId
+      });
+
+    if (!conversation) {
+
+      return res.status(404).json({
+        error: "Conversación no encontrada"
+      });
+
+    }
+
+    res.json(
+      conversation.messages || []
+    );
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error obteniendo mensajes"
     });
+
   }
 
-  res.json(conversation.messages);
 });
 
 // CAMBIAR MODO IA / HUMANO
-app.post('/conversation/mode', (req, res) => {
-  const { conversationId, mode } = req.body;
+app.post('/conversation/mode', async (req, res) => {
 
-  if (!conversationsDB[conversationId]) {
-    return res.status(404).json({
-      error: 'Conversación no encontrada',
+  try {
+
+    const { conversationId, mode } = req.body;
+
+    const conversation =
+      await Conversation.findOne({
+        phone: conversationId
+      });
+
+    if (!conversation) {
+      return res.status(404).json({
+        error: 'Conversación no encontrada'
+      });
+    }
+
+    conversation.mode = mode;
+
+    await conversation.save();
+
+    res.json({
+      success: true,
+      mode
     });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: 'Error cambiando modo'
+    });
+
   }
 
-  conversationsDB[conversationId].mode = mode;
-
-  res.json({
-    success: true,
-    mode
-  });
 });
 
 // RESPUESTA HUMANA DESDE CRM
 app.post('/agent/reply', async (req, res) => {
+
   try {
 
     const {
@@ -106,7 +145,9 @@ app.post('/agent/reply', async (req, res) => {
     } = req.body;
 
     const conversation =
-      conversationsDB[conversationId];
+      await Conversation.findOne({
+        phone: conversationId
+      });
 
     if (!conversation) {
       return res.status(404).json({
@@ -114,18 +155,17 @@ app.post('/agent/reply', async (req, res) => {
       });
     }
 
-    // Guardar mensaje operador
     conversation.messages.push({
-      id: Date.now().toString(),
       sender_type: "agent",
       content: message,
       timestamp: new Date(),
       agent: agentName
     });
 
-    conversation.updated_at = new Date();
+    conversation.updatedAt = new Date();
 
-    // Enviar WhatsApp
+    await conversation.save();
+
     await enviarMensaje(
       conversationId,
       message
@@ -142,26 +182,49 @@ app.post('/agent/reply', async (req, res) => {
     res.status(500).json({
       error: "Error enviando mensaje"
     });
+
   }
+
 });
 
 // CERRAR CONVERSACIÓN
-app.post('/conversation/close', (req, res) => {
+app.post('/conversation/close', async (req, res) => {
 
-  const { conversationId } = req.body;
+  try {
 
-  if (!conversationsDB[conversationId]) {
-    return res.status(404).json({
-      error: 'Conversación no encontrada',
+    const { conversationId } = req.body;
+
+    const conversation =
+      await Conversation.findOne({
+        phone: conversationId
+      });
+
+    if (!conversation) {
+
+      return res.status(404).json({
+        error: "Conversación no encontrada"
+      });
+
+    }
+
+    conversation.status = "closed";
+
+    await conversation.save();
+
+    res.json({
+      success: true
     });
+
+  } catch (error) {
+
+    console.error(error);
+
+    res.status(500).json({
+      error: "Error cerrando conversación"
+    });
+
   }
 
-  conversationsDB[conversationId].status =
-    "closed";
-
-  res.json({
-    success: true
-  });
 });
 // ELIMINAR CONVERSACIÓN
 
@@ -484,7 +547,7 @@ Indica que primero se realiza una evaluación para entender objetivos, presupues
 "El negocio que responde primero es el que se queda con el cliente."
 
 - Detalle:
-El 70% de las ventas en WhatsApp se pierden por responder tarde. Nuestro Agente de IA responde automáticamente, vende, agenda, filtra clientes y trabaja 24/7 incluso cuando el negocio está cerrado.
+El 70% de las ventas en WhatsApp se pierden por responder tarde. Nuestro Agente de IA responde automáticamente, vende, agenda, filtra clientes y trabaja 24/7 incluso cuando el negocio دبestá cerrado.
 
 - Modalidad 1 — SOLO IA:
 ✔ Agente IA para WhatsApp
@@ -886,71 +949,65 @@ if (conversation.leadScore >= 50) {
   };
 }
 
+// 🔥 FIX B: Eliminado el "let" para evitar error de scope
 // MODIFICACIÓN 1: Inicializar la base temporal si no existe
-if (!conversationsDB[from]) {
-  conversationsDB[from] = {
-    mode: 'ai',
-    status: 'open',
-    needsHuman: false,
-    messages: []
-  };
+conversation =
+  await Conversation.findOne({
+    phone: from
+  });
+
+if (!conversation) {
+
+  conversation =
+    new Conversation({
+
+      phone: from,
+
+      mode: "ai",
+
+      status: "open",
+
+      needsHuman: false,
+
+      messages: []
+
+    });
+
+  await conversation.save();
+
 }
 
 // ================= GUARDAR MENSAJE USUARIO =================
 
-conversationsDB[from].messages.push({
+conversation.messages.push({
   id: Date.now().toString(),
   sender_type: "user",
   content: textoUsuario,
   timestamp: new Date()
 });
 
-conversationsDB[from].updated_at =
-  new Date();
-  
-
-  conversation.messages.push({
-  sender_type: "user",
-  content: textoUsuario
-});
+conversation.updatedAt = new Date();
 
 await conversation.save();
 
-  // ================= MODO HUMANO =================
-// ================= AUTO TRANSFER IA -> HUMANO =================
+// 🔥 FIX C: Eliminado el bloque duplicado que volvía a pushear el textoUsuario
+
+
+ // ================= MODO HUMANO =================
+
+// 🔥 FIX B: Eliminado el "const" para evitar error de scope
+conversation =
+  await Conversation.findOne({
+    phone: from
+  });
 
 if (
-  conversationsDB[from].needsHuman &&
-  conversationsDB[from].mode !== "human"
-) {
-
-  conversationsDB[from].mode =
-    "human";
-
-  conversationsDB[from].assigned_agent =
-    "Operador Principal";
-
-  conversationsDB[from].updated_at =
-    new Date();
-
-  await enviarMensaje(
-    from,
-    "Perfecto 👍\n\nVoy a transferirte con un ingeniero especializado de GCTEL para darte atención personalizada."
-  );
-
-  console.log(
-    "🔴 Conversación transferida a humano:",
-    from
-  );
-
-  return;
-}
-if (
-  conversationsDB[from].mode === "human"
+  conversation &&
+  conversation.mode === "human"
 ) {
 
   console.log(
-    "Modo humano activo:",
+    "🔴 Modo humano activo:",
     from
   );
 
@@ -1002,25 +1059,19 @@ Nuestras especialidades son:
       content: respuesta
     });
 
-    // ================= GUARDAR RESPUESTA IA =================
+// ================= GUARDAR RESPUESTA IA =================
 
-conversationsDB[from].messages.push({
+conversation.messages.push({
   id: Date.now().toString(),
   sender_type: "ai",
   content: respuesta,
   timestamp: new Date()
 });
 
-conversationsDB[from].updated_at =
-  new Date();
+conversation.updatedAt = new Date();
 
-  conversation.messages.push({
-  sender_type: "ai",
-  content: respuesta
-});
-
-// MODIFICACIÓN 2: Guardar el documento en MongoDB con el mensaje de la IA
 await conversation.save();
+
 
     await enviarMensaje(from, respuesta);
   } catch (error) {
@@ -1174,27 +1225,27 @@ app.get('/metrics', async (req, res) => {
       await Conversation.find();
 
     const activeConversations =
-      conversations.filter(
+      conversaciones.filter(
         c => c.status !== "closed"
       ).length;
 
     const resolvedToday =
-      conversations.filter(
+      conversaciones.filter(
         c => c.status === "closed"
       ).length;
 
     const aiConversations =
-      conversations.filter(
+      conversaciones.filter(
         c => c.mode === "ai"
       ).length;
 
     const humanConversations =
-      conversations.filter(
+      conversaciones.filter(
         c => c.mode === "human"
       ).length;
 
     const totalMessages =
-      conversations.reduce(
+      conversaciones.reduce(
         (acc, conv) =>
           acc + (conv.messages?.length || 0),
         0
