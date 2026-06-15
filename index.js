@@ -58,101 +58,58 @@ app.get('/webhook', (req, res) => {
 
 // ================= CRM ENDPOINTS =================
 
-// OBTENER MENSAJES DE UNA CONVERSACIÓN
+// 1. OBTENER MENSAJES DE UNA CONVERSACIÓN
 app.get('/messages/:conversationId', async (req, res) => {
-
   try {
-
     const { conversationId } = req.params;
 
-    const conversation =
-      await Conversation.findOne({
-        phone: conversationId
-      });
+    // Busca por Mongo _id o por teléfono
+    const conversation = await Conversation.findById(conversationId).catch(() => null) 
+                      || await Conversation.findOne({ phone: conversationId });
 
     if (!conversation) {
-
-      return res.status(404).json({
-        error: "Conversación no encontrada"
-      });
-
+      return res.status(404).json({ error: "Conversación no encontrada" });
     }
 
-    res.json(
-      conversation.messages || []
-    );
-
+    res.json(conversation.messages || []);
   } catch (error) {
-
     console.error(error);
-
-    res.status(500).json({
-      error: "Error obteniendo mensajes"
-    });
-
+    res.status(500).json({ error: "Error obteniendo mensajes" });
   }
-
 });
 
-// CAMBIAR MODO IA / HUMANO
+// 2. CAMBIAR MODO IA / HUMANO
 app.post('/conversation/mode', async (req, res) => {
-
   try {
-
     const { conversationId, mode } = req.body;
 
-    const conversation =
-      await Conversation.findOne({
-        phone: conversationId
-      });
+    const conversation = await Conversation.findById(conversationId).catch(() => null) 
+                      || await Conversation.findOne({ phone: conversationId });
 
     if (!conversation) {
-      return res.status(404).json({
-        error: 'Conversación no encontrada'
-      });
+      return res.status(404).json({ error: 'Conversación no encontrada' });
     }
 
     conversation.mode = mode;
-
     await conversation.save();
 
-    res.json({
-      success: true,
-      mode
-    });
-
+    res.json({ success: true, mode });
   } catch (error) {
-
     console.error(error);
-
-    res.status(500).json({
-      error: 'Error cambiando modo'
-    });
-
+    res.status(500).json({ error: 'Error cambiando modo' });
   }
-
 });
 
-// RESPUESTA HUMANA DESDE CRM
+// 3. RESPUESTA HUMANA DESDE CRM
 app.post('/agent/reply', async (req, res) => {
-
   try {
+    const { conversationId, message, agentName } = req.body;
 
-    const {
-      conversationId,
-      message,
-      agentName
-    } = req.body;
-
-    const conversation =
-      await Conversation.findOne({
-        phone: conversationId
-      });
+    const conversation = await Conversation.findById(conversationId).catch(() => null) 
+                      || await Conversation.findOne({ phone: conversationId });
 
     if (!conversation) {
-      return res.status(404).json({
-        error: "Conversación no encontrada"
-      });
+      return res.status(404).json({ error: "Conversación no encontrada" });
     }
 
     conversation.messages.push({
@@ -163,68 +120,38 @@ app.post('/agent/reply', async (req, res) => {
     });
 
     conversation.updatedAt = new Date();
-
     await conversation.save();
 
-    await enviarMensaje(
-      conversationId,
-      message
-    );
+    // 🔥 FIX CRÍTICO: Usar 'conversation.phone' y NO 'conversationId'
+    await enviarMensaje(conversation.phone, message);
 
-    res.json({
-      success: true
-    });
-
+    res.json({ success: true });
   } catch (error) {
-
     console.error(error);
-
-    res.status(500).json({
-      error: "Error enviando mensaje"
-    });
-
+    res.status(500).json({ error: "Error enviando mensaje" });
   }
-
 });
 
-// CERRAR CONVERSACIÓN
+// 4. CERRAR CONVERSACIÓN
 app.post('/conversation/close', async (req, res) => {
-
   try {
-
     const { conversationId } = req.body;
 
-    const conversation =
-      await Conversation.findOne({
-        phone: conversationId
-      });
+    const conversation = await Conversation.findById(conversationId).catch(() => null) 
+                      || await Conversation.findOne({ phone: conversationId });
 
     if (!conversation) {
-
-      return res.status(404).json({
-        error: "Conversación no encontrada"
-      });
-
+      return res.status(404).json({ error: "Conversación no encontrada" });
     }
 
     conversation.status = "closed";
-
     await conversation.save();
 
-    res.json({
-      success: true
-    });
-
+    res.json({ success: true });
   } catch (error) {
-
     console.error(error);
-
-    res.status(500).json({
-      error: "Error cerrando conversación"
-    });
-
+    res.status(500).json({ error: "Error cerrando conversación" });
   }
-
 });
 // ELIMINAR CONVERSACIÓN
 
